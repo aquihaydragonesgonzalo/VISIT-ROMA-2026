@@ -1,0 +1,7 @@
+{
+  "name": "VISIT ROMA 2026",
+  "description": "Tu asistente personal para la escala en Copenhague el 1O de Mayo de 2026. Itinerario, mapa y control de gastos.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Roma 2026</title>
+    <meta name="theme-color" content="#B91C1C">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjMqIMsVcH4cJyBPns11EXgA9GU2G_GIKn8VZZ1xZdjE0YcbKxgP9RubrKKajMFpYoXOkkaRozSncgrDKTpgqR8rEJaRg6EabSfiifPpqA2YjgZ-n1MJgFjRgbM8XFMjRfU67P3XOM3gg6fOi-ffux-i08-BgUE69iuYzbNX-eeqrjQhI6LWK9lBvwSTno/s320/ROMA%20TRAVEL.jpg">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        roma: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5', 400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c', 800: '#991b1b', 900: '#7f1d1d' },
+                        gold: { 500: '#D4AF37' },
+                    },
+                    fontFamily: {
+                        sans: ['Roboto Condensed', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* CRITICAL FIXES FOR MOBILE LAYOUT */
+        html, body { 
+            height: 100%; 
+            width: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overscroll-behavior-y: none; /* Prevent pull-to-refresh */
+        }
+        body { 
+            font-family: 'Roboto Condensed', sans-serif; 
+            -webkit-tap-highlight-color: transparent; 
+            /* Use dynamic viewport height for mobile browsers */
+            height: 100dvh; 
+        }
+        #root {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        
+        /* Hide scrollbar but keep functionality */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .instagram-gradient {
+            background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-900 overflow-hidden">
+    <div id="root" class="h-full"></div>
+
+    <!-- Leaflet JS (Global) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Import Map (Cleaned & Fixed) -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "leaflet": "https://aistudiocdn.com/leaflet@^1.9.4"
+  }
+}
+</script>
+
+    <!-- Main Application Code -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo, useRef } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { 
+            CalendarClock, Map as MapIcon, Wallet, BookOpen, Anchor, 
+            AlertTriangle, CheckCircle2, Circle, Clock, MapPin, 
+            ArrowRight, Info, Volume2, Thermometer, ShoppingBag, 
+            Camera, Sun, Moon, CloudRain, ExternalLink, Ticket,
+            Instagram, Languages, Train, Bus
+        } from 'lucide-react';
+
+        // --- CONSTANTS & DATA (ROMA 2026) ---
+        const SHIP_DEPARTURE_TIME = "19:00";
+        const SHIP_ONBOARD_TIME = "18:30"; 
+        const STORAGE_KEY = 'roma_guide_2026_v2_fixed'; 
+        
+        // Coordenadas
+        const COORDS = {
+            CIVITAVECCHIA_PORT: { lat: 42.0925, lng: 11.7900 },
+            SHUTTLE_STOP: { lat: 42.097560, lng: 11.788523 },
+            CIVITAVECCHIA_STATION: { lat: 42.08866, lng: 11.79471 },
+            ROMA_TERMINI: { lat: 41.9009, lng: 12.5020 },
+            COLOSSEO: { lat: 41.89021, lng: 12.49223 },
+            CONSTANTINO: { lat: 41.88989, lng: 12.49051 },
+            CAMPIDOGLIO: { lat: 41.89332, lng: 12.48289 },
+            VITTORIO: { lat: 41.89459, lng: 12.48308 },
+            TREVI: { lat: 41.90093, lng: 12.48331 },
+            PARTENON: { lat: 41.89861, lng: 12.47687 },
+            NAVONA: { lat: 41.89916, lng: 12.47307 },
+            SANT_ANGELO: { lat: 41.90306, lng: 12.46627 },
+            SAN_PIETRO_PLAZA: { lat: 41.90216, lng: 12.45735 },
+            ROMA_S_PIETRO_STATION: { lat: 41.89648, lng: 12.45447 }
+        };
+
+        const INITIAL_ITINERARY = [
+            {
+                id: '0', title: 'Llegada a Puerto', startTime: '07:00', endTime: '07:35',
+                locationName: 'Civitavecchia', coords: COORDS.CIVITAVECCHIA_PORT,
+                description: 'El barco atraca. Prepárate para salir rápido.',
+                keyDetails: 'Tip: Sé de los primeros en la fila de salida (cubierta 0).',
+                priceEUR: 0, type: 'logistics', completed: false
+            },
+            {
+                id: '1', title: 'Desembarco y Shuttle', startTime: '07:35', endTime: '08:00',
+                locationName: 'Barco', endLocationName: 'Largo della Pace',
+                coords: COORDS.CIVITAVECCHIA_PORT, endCoords: COORDS.SHUTTLE_STOP,
+                description: 'Toma el Shuttle Bus gratuito hasta la salida del puerto.',
+                keyDetails: 'Te deja en el centro de servicios (Largo della Pace).',
+                priceEUR: 0, type: 'transport', completed: false
+            },
+            {
+                id: '2', title: 'Bus/Walk a Estación Tren', startTime: '08:09', endTime: '08:30',
+                locationName: 'Shuttle Stop', endLocationName: 'Estación Civitavecchia',
+                coords: COORDS.SHUTTLE_STOP, endCoords: COORDS.CIVITAVECCHIA_STATION,
+                description: 'Bus urbano o caminata (20min) por el paseo marítimo.',
+                keyDetails: 'Compra ticket BIRG (5 Zonas - 12€) en la estación. ¡VALIDALO!',
+                priceEUR: 12, type: 'transport', completed: false, notes: 'CRITICAL',
+                googleMapsUrl: 'https://maps.app.goo.gl/YDdgzje7dQJyE1Yq6'
+            },
+            {
+                id: '3', title: 'Tren: Civitavecchia → Termini', startTime: '08:47', endTime: '09:50',
+                locationName: 'Estación Civitavecchia', endLocationName: 'Roma Termini',
+                coords: COORDS.CIVITAVECCHIA_STATION, endCoords: COORDS.ROMA_TERMINI,
+                description: 'Tren Regional Veloce. Duración ~1h.',
+                keyDetails: 'Siéntate a la DERECHA para ver el mar.',
+                priceEUR: 0, type: 'transport', completed: false,
+                ticketUrl: 'https://www.trenitalia.com/',
+                googleMapsUrl: 'https://maps.app.goo.gl/JjbqPZLBnUzLabxE7'
+            },
+            {
+                id: '4', title: 'Metro: Termini → Colosseo', startTime: '10:23', endTime: '10:30',
+                locationName: 'Termini (Metro B)', endLocationName: 'Colosseo',
+                coords: COORDS.ROMA_TERMINI, endCoords: COORDS.COLOSSEO,
+                description: 'Metro Línea B (Azul) dirección LAURENTINA. 2 paradas.',
+                keyDetails: 'Ticket incluido en el BIRG.',
+                priceEUR: 0, type: 'transport', completed: false,
+                googleMapsUrl: 'https://maps.app.goo.gl/dtCWbA5sLFjTWRmaA'
+            },
+            {
+                id: '5', title: 'Ruta Imperial: Coliseo y Foros', startTime: '10:30', endTime: '11:30',
+                locationName: 'Coliseo', endLocationName: 'Pza. Venezia',
+                coords: COORDS.COLOSSEO, endCoords: COORDS.VITTORIO,
+                description: 'Ruta a pie: Coliseo (fuera) -> Arco Constantino -> Campidoglio -> Víctor Manuel II.',
+                keyDetails: 'Mejor foto Coliseo: escaleras Via Nicola Salvi.',
+                priceEUR: 0, type: 'sightseeing', completed: false,
+                googleMapsUrl: 'https://maps.app.goo.gl/CQncYhLMhwotdwaK9'
+            },
+            {
+                id: '6', title: 'Fontana di Trevi', startTime: '11:30', endTime: '12:30',
+                locationName: 'Fontana di Trevi', coords: COORDS.TREVI,
+                description: 'El icono barroco más famoso. Tradición: Lanza una moneda con la mano derecha sobre el hombro izquierdo para volver a Roma.',
+                keyDetails: '⚠️ AFORO LIMITADO (400 pax). Acceso único por escalera central. Salida por Via dei Crociferi. Flujo circular continuo. PROHIBIDO: Sentarse en el borde (multas), comer o beber. Posible tasa de 2€ (llevar monedas).',
+                priceEUR: 2, type: 'sightseeing', completed: false,
+                instaTag: 'https://www.instagram.com/explore/tags/trevifountain/',
+                googleMapsUrl: 'https://maps.app.goo.gl/CQncYhLMhwotdwaK9'
+            },
+            {
+                id: '7', title: 'Almuerzo Rápido', startTime: '12:30', endTime: '13:15',
+                locationName: 'Zona Panteón', coords: COORDS.PARTENON,
+                description: 'Pizza al taglio o Panini. Gelato de postre.',
+                keyDetails: 'Recomendado: Giolitti o Della Palma para helado.',
+                priceEUR: 20, type: 'food', completed: false,
+                googleMapsUrl: 'https://maps.app.goo.gl/CQncYhLMhwotdwaK9'
+            },
+            {
+                id: '8', title: 'Panteón y Navona', startTime: '13:15', endTime: '14:00',
+                locationName: 'Panteón', endLocationName: 'Castillo Sant\'Angelo',
+                coords: COORDS.PARTENON, endCoords: COORDS.SANT_ANGELO,
+                description: 'Panteón (fuera) -> Plaza Navona -> Puente Sant\'Angelo.',
+                keyDetails: 'Cruza el puente hacia el Vaticano.',
+                priceEUR: 0, type: 'sightseeing', completed: false,
+                googleMapsUrl: 'https://maps.app.goo.gl/CQncYhLMhwotdwaK9'
+            },
+            {
+                id: '9', title: 'San Pedro y Caminata a Estación', startTime: '14:00', endTime: '14:30',
+                locationName: 'Plaza San Pedro', endLocationName: 'Estación Roma S. Pietro',
+                coords: COORDS.SAN_PIETRO_PLAZA, endCoords: COORDS.ROMA_S_PIETRO_STATION,
+                description: 'Vista rápida de la plaza y caminar hacia estación Roma S. Pietro.',
+                keyDetails: '¡OJO! No volvemos a Termini. Salimos de ROMA S. PIETRO.',
+                priceEUR: 0, type: 'logistics', completed: false, notes: 'CRITICAL',
+                googleMapsUrl: 'https://maps.app.goo.gl/tLzif49nhCSjVbYi8'
+            },
+            {
+                id: '10', title: 'Tren: S. Pietro → Civitavecchia', startTime: '14:30', endTime: '15:30',
+                locationName: 'Estación Roma S. Pietro', endLocationName: 'Estación Civitavecchia',
+                coords: COORDS.ROMA_S_PIETRO_STATION, endCoords: COORDS.CIVITAVECCHIA_STATION,
+                description: 'Tren Regional. Ticket BIRG válido.',
+                keyDetails: 'Tiempo de viaje ~45-50 min.',
+                priceEUR: 0, type: 'transport', completed: false,
+                googleMapsUrl: 'https://maps.app.goo.gl/tLzif49nhCSjVbYi8'
+            },
+            {
+                id: '11', title: 'Regreso al Barco', startTime: '15:35', endTime: '16:30',
+                locationName: 'Estación Civitavecchia', endLocationName: 'Muelle',
+                coords: COORDS.CIVITAVECCHIA_STATION, endCoords: COORDS.CIVITAVECCHIA_PORT,
+                description: 'Caminar/Bus a Shuttle Largo della Pace -> Shuttle a Barco.',
+                keyDetails: 'Margen de seguridad amplio.',
+                priceEUR: 0, type: 'logistics', completed: false
+            },
+            {
+                id: '12', title: '¡A BORDO! (Límite 18:30)', startTime: '18:30', endTime: '18:30',
+                locationName: 'Pasarela Barco', coords: COORDS.CIVITAVECCHIA_PORT,
+                description: 'Hora límite absoluta. Todos a bordo.',
+                keyDetails: 'No llegues tarde.',
+                priceEUR: 0, type: 'logistics', completed: false, notes: 'CRITICAL'
+            },
+            {
+                id: '13', title: 'Salida del Barco', startTime: '19:00', endTime: '19:00',
+                locationName: 'Muelle', coords: COORDS.CIVITAVECCHIA_PORT,
+                description: 'Zarpamos hacia el siguiente destino.',
+                keyDetails: 'Ciao Roma!',
+                priceEUR: 0, type: 'logistics', completed: false
+            }
+        ];
+
+        const ITALIAN_WORDS = [
+            { word: 'Buongiorno', phonetic: "Buon-yór-no", simplified: 'Buon-yor-no', meaning: 'Buenos días / Hola' },
+            { word: 'Grazie', phonetic: 'Grá-tsie', simplified: 'Gra-tsie', meaning: 'Gracias' },
+            { word: 'Prego', phonetic: "Pré-go", simplified: 'Pre-go', meaning: 'De nada / Adelante' },
+            { word: 'Dov\'è il bagno?', phonetic: "Do-vé il bá-ño", simplified: 'Do-ve il ba-ño', meaning: '¿Dónde está el baño?' },
+            { word: 'Acqua', phonetic: "Ác-cua", simplified: 'A-cua', meaning: 'Agua' },
+            { word: 'Conto', phonetic: "Cón-to", simplified: 'Con-to', meaning: 'La cuenta' },
+            { word: 'Uscita', phonetic: "U-shí-ta", simplified: 'U-shi-ta', meaning: 'Salida' },
+            { word: 'Stazione', phonetic: "Sta-zió-ne", simplified: 'Sta-tsio-ne', meaning: 'Estación' },
+            { word: 'Biglietto', phonetic: "Bi-llié-tto", simplified: 'Bi-lie-to', meaning: 'Billete' },
+            { word: 'Aiuto', phonetic: "A-yú-to", simplified: 'A-yu-to', meaning: 'Ayuda' }
+        ];
+
+        // --- UTILS ---
+        const calculateDistance = (coord1, coord2) => {
+            if(!coord1 || !coord2) return 0;
+            const R = 6371e3;
+            const φ1 = (coord1.lat * Math.PI) / 180;
+            const φ2 = (coord2.lat * Math.PI) / 180;
+            const Δφ = ((coord2.lat - coord1.lat) * Math.PI) / 180;
+            const Δλ = ((coord2.lng - coord1.lng) * Math.PI) / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        };
+
+        const calculateDuration = (startStr, endStr) => {
+            const [startH, startM] = startStr.split(':').map(Number);
+            const [endH, endM] = endStr.split(':').map(Number);
+            let diffMins = (endH * 60 + endM) - (startH * 60 + startM);
+            const hours = Math.floor(diffMins / 60);
+            const minutes = diffMins % 60;
+            if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+            if (hours > 0) return `${hours}h`;
+            return `${minutes} min`;
+        };
+        
+        const calculateGap = (endStrPrev, startStrNext) => {
+            const [endH, endM] = endStrPrev.split(':').map(Number);
+            const [startH, startM] = startStrNext.split(':').map(Number);
+            const diffMins = (startH * 60 + startM) - (endH * 60 + endM);
+            if (diffMins > 0) return diffMins;
+            return 0;
+        };
+
+        // --- COMPONENTS ---
+
+        const SharedFooter = () => (
+             <div className="mt-8 mb-6 text-center text-xs text-stone-400 pb-4">
+                <p>ACTUALIZADO EL 06/12/25</p>
+                <p>© 2025- 2026 Gonzalo Arenas de la Hoz</p>
+            </div>
+        );
+
+        const Timeline = ({ itinerary, onToggleComplete, onLocate, userLocation }) => {
+            const now = new Date();
+            const currentHours = now.getHours();
+            const currentMinutes = now.getMinutes();
+            const currentTimeVal = currentHours * 60 + currentMinutes;
+
+            const [selectedActivity, setSelectedActivity] = useState(null);
+
+            const isCurrent = (act) => {
+                const [startH, startM] = act.startTime.split(':').map(Number);
+                const [endH, endM] = act.endTime.split(':').map(Number);
+                const startVal = startH * 60 + startM;
+                const endVal = endH * 60 + endM;
+                return currentTimeVal >= startVal && currentTimeVal < endVal;
+            };
+
+            const getProgress = (act) => {
+                if (!isCurrent(act)) return 0;
+                const [startH, startM] = act.startTime.split(':').map(Number);
+                const [endH, endM] = act.endTime.split(':').map(Number);
+                const startVal = startH * 60 + startM;
+                const endVal = endH * 60 + endM;
+                const total = endVal - startVal;
+                const elapsed = currentTimeVal - startVal;
+                return Math.min(100, Math.max(0, (elapsed / total) * 100));
+            };
+
+            return (
+                <div className="pb-32 px-4 pt-4 max-w-lg mx-auto h-full overflow-y-auto">
+                    <h2 className="text-2xl font-bold text-roma-700 mb-6">Itinerario Jueves</h2>
+                    
+                    <div className="relative border-l-2 border-roma-200 ml-3">
+                        {itinerary.map((act, index) => {
+                            const active = isCurrent(act);
+                            const progress = getProgress(act);
+                            const prevAct = index > 0 ? itinerary[index - 1] : null;
+                            const gap = prevAct ? calculateGap(prevAct.endTime, act.startTime) : 0;
+                            
+                            let distStr = "";
+                            if (userLocation) {
+                                const dist = calculateDistance(userLocation, act.coords);
+                                distStr = dist > 1000 ? `a ${(dist/1000).toFixed(1)} km` : `a ${Math.round(dist)} m`;
+                            }
+
+                            return (
+                                <div key={act.id}>
+                                    {gap > 0 && (
+                                        <div className="ml-6 mb-6 flex items-center justify-center">
+                                            <span className="bg-stone-100 text-stone-500 text-xs px-2 py-1 rounded-full border border-stone-200 flex items-center shadow-sm">
+                                                <Clock size={12} className="mr-1" />
+                                                ⬇ {gap} min traslado/libre
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="mb-8 ml-6 relative">
+                                        <div 
+                                            className={`absolute -left-[31px] top-0 rounded-full bg-white border-2 cursor-pointer z-10 transition-all ${
+                                                act.completed ? 'border-green-600 text-green-600' : 
+                                                active ? 'border-gold-500 text-gold-500 scale-110 shadow-[0_0_10px_rgba(212,175,55,0.5)]' : 'border-roma-500 text-roma-500'
+                                            }`}
+                                            onClick={() => onToggleComplete(act.id)}
+                                        >
+                                            {act.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+                                        </div>
+
+                                        <div 
+                                            className={`p-4 rounded-xl border shadow-sm transition-all relative overflow-hidden active:scale-[0.99] ${
+                                                active ? 'bg-white border-gold-500 ring-2 ring-gold-500/20 shadow-lg' : 
+                                                act.completed ? 'bg-green-50 border-green-200 opacity-80' : 'bg-white border-roma-100'
+                                            }`}
+                                            onClick={() => setSelectedActivity(act)}
+                                        >
+                                            {active && (
+                                                <div className="absolute top-0 left-0 h-1 bg-gold-500 transition-all duration-1000" style={{width: `${progress}%`}} />
+                                            )}
+
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <div className="flex items-center space-x-2 mb-1 flex-wrap gap-y-1">
+                                                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${active ? 'bg-gold-500 text-white' : 'bg-roma-100 text-roma-800'}`}>
+                                                            {act.startTime} - {act.endTime}
+                                                        </span>
+                                                        <span className="text-xs text-stone-500 font-medium bg-stone-100 px-1.5 py-0.5 rounded border border-stone-200">
+                                                            {calculateDuration(act.startTime, act.endTime)}
+                                                        </span>
+                                                        {active && <span className="text-[10px] font-bold text-gold-600 animate-pulse">⚡ EN CURSO</span>}
+                                                    </div>
+                                                    <h3 className="font-bold text-lg text-gray-800 leading-tight">{act.title}</h3>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                     {act.notes === 'CRITICAL' && <AlertTriangle className="text-red-600" size={20} />}
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center text-sm text-gray-600 mb-3 gap-2">
+                                                 <span className="flex items-center truncate max-w-[150px]">
+                                                     <MapPin size={14} className="mr-1 text-roma-500"/>
+                                                     {act.locationName}
+                                                 </span>
+                                                 {distStr && <span className="text-xs text-roma-700 font-bold bg-roma-50 px-1.5 py-0.5 rounded border border-roma-100">{distStr}</span>}
+                                            </div>
+
+                                            <div className="bg-stone-50 p-3 rounded text-sm text-stone-700 italic border-l-4 border-gold-500 mb-3">
+                                                "{act.keyDetails}"
+                                            </div>
+
+                                            <div className="flex gap-2 mt-3 overflow-x-auto pb-1 no-scrollbar">
+                                                 <button 
+                                                    onClick={(e) => { e.stopPropagation(); onLocate(act.coords, act.endCoords); }}
+                                                    className="flex items-center text-xs font-medium bg-roma-50 text-roma-800 px-3 py-1.5 rounded-lg border border-roma-200 whitespace-nowrap"
+                                                 >
+                                                    <MapPin size={14} className="mr-1" /> Ubicación
+                                                 </button>
+                                                 {act.googleMapsUrl && (
+                                                     <button 
+                                                        onClick={(e) => { e.stopPropagation(); window.open(act.googleMapsUrl, '_blank'); }}
+                                                        className="flex items-center text-xs font-medium bg-white text-green-700 px-3 py-1.5 rounded-lg border border-green-200 whitespace-nowrap"
+                                                     >
+                                                        <MapIcon size={14} className="mr-1" /> 🗺️ Ruta
+                                                     </button>
+                                                 )}
+                                                 {(act.ticketUrl) && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); window.open(act.ticketUrl, '_blank'); }}
+                                                        className="flex items-center text-xs font-medium bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg border border-orange-200 whitespace-nowrap"
+                                                    >
+                                                        <Ticket size={14} className="mr-1" /> Tickets
+                                                    </button>
+                                                 )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <SharedFooter />
+
+                    {/* Modal Detalle */}
+                    {selectedActivity && (
+                        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelectedActivity(null)}>
+                            <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-6 shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="text-xl font-bold text-roma-800">{selectedActivity.title}</h3>
+                                    <button onClick={() => setSelectedActivity(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <div className="space-y-4">
+                                    <p className="text-gray-600 leading-relaxed">{selectedActivity.description}</p>
+                                    
+                                    <div className="bg-stone-100 p-4 rounded-xl">
+                                        <p className="font-bold text-sm text-stone-700 mb-2">Detalles Clave:</p>
+                                        <p className="text-sm text-stone-600">{selectedActivity.keyDetails}</p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => { onLocate(selectedActivity.coords); setSelectedActivity(null); }} className="flex items-center justify-center bg-roma-100 text-roma-800 py-3 rounded-xl font-bold">
+                                            <MapPin className="mr-2" size={18}/> Ver Mapa
+                                        </button>
+                                        {selectedActivity.googleMapsUrl && (
+                                            <a href={selectedActivity.googleMapsUrl} target="_blank" className="flex items-center justify-center bg-green-100 text-green-700 py-3 rounded-xl font-bold">
+                                                <MapIcon className="mr-2" size={18}/> Ruta
+                                            </a>
+                                        )}
+                                        {selectedActivity.ticketUrl && (
+                                            <a href={selectedActivity.ticketUrl} target="_blank" className="col-span-2 flex items-center justify-center bg-orange-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-orange-600">
+                                                <Ticket className="mr-2" size={18}/> Comprar Tickets
+                                            </a>
+                                        )}
+                                        {selectedActivity.instaTag && (
+                                            <a href={selectedActivity.instaTag} target="_blank" className="col-span-2 flex items-center justify-center instagram-gradient text-white py-3 rounded-xl font-bold shadow-md">
+                                                <Instagram className="mr-2" size={18}/> Ver en Instagram
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Budget = ({ itinerary }) => {
+            const paidActivities = useMemo(() => itinerary.filter(a => a.priceEUR > 0), [itinerary]);
+            const total = useMemo(() => paidActivities.reduce((acc, curr) => acc + curr.priceEUR, 0), [paidActivities]);
+            const COLORS = ['#dc2626', '#d97706', '#059669', '#2563eb', '#9333ea'];
+            
+            // Manual Expenses
+            const [manualExpenses, setManualExpenses] = useState([]);
+            const [newExpenseName, setNewExpenseName] = useState('');
+            const [newExpenseCost, setNewExpenseCost] = useState('');
+
+            const addExpense = () => {
+                if(newExpenseName && newExpenseCost) {
+                    setManualExpenses([...manualExpenses, { name: newExpenseName, cost: parseFloat(newExpenseCost) }]);
+                    setNewExpenseName('');
+                    setNewExpenseCost('');
+                }
+            };
+            const manualTotal = manualExpenses.reduce((acc, curr) => acc + curr.cost, 0);
+            
+            const completedActivities = paidActivities.filter(a => a.completed);
+            const spent = completedActivities.reduce((acc, curr) => acc + curr.priceEUR, 0) + manualTotal;
+            const progressPct = Math.min(100, (spent / (total + manualTotal || 1)) * 100);
+
+            return (
+                <div className="pb-32 px-4 pt-6 max-w-lg mx-auto h-full overflow-y-auto">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold text-roma-700">Presupuesto</h2>
+                        <span className="text-sm font-bold bg-roma-100 text-roma-800 px-3 py-1 rounded-full">EUR Only</span>
+                    </div>
+
+                    <div className="bg-gradient-to-r from-roma-600 to-roma-800 rounded-xl p-6 text-white shadow-lg mb-8">
+                        <div className="flex justify-between items-end mb-2">
+                            <div>
+                                <p className="text-roma-200 text-sm uppercase tracking-wide">Gastado</p>
+                                <div className="text-4xl font-bold">€{spent.toFixed(2)}</div>
+                            </div>
+                            <div className="text-right opacity-80">
+                                <p className="text-xs">Estimado</p>
+                                <p className="font-bold">€{total.toFixed(2)}</p>
+                            </div>
+                        </div>
+                        <div className="w-full bg-black/20 rounded-full h-2 mt-2">
+                            <div className="bg-gold-500 h-2 rounded-full transition-all duration-500" style={{width: `${progressPct}%`}}></div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-stone-200 mb-8 overflow-hidden">
+                        {paidActivities.map((act, idx) => (
+                            <div key={act.id} className="flex justify-between items-center p-4 border-b border-stone-50 last:border-0">
+                                <div className="flex items-center">
+                                    <div 
+                                        className={`w-3 h-3 rounded-full mr-3`}
+                                        style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                                    ></div>
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium text-gray-800">{act.title}</span>
+                                        {act.completed && <span className="text-[10px] text-green-600 font-bold">PAGADO</span>}
+                                    </div>
+                                </div>
+                                <div className="font-bold text-gray-700">€{act.priceEUR}</div>
+                            </div>
+                        ))}
+                        {manualExpenses.map((exp, i) => (
+                             <div key={`man-${i}`} className="flex justify-between items-center p-4 border-b border-stone-50 bg-yellow-50/50">
+                                <div className="flex items-center">
+                                    <div className="w-3 h-3 rounded-full mr-3 bg-gold-500"></div>
+                                    <p className="text-sm font-medium text-gray-800">{exp.name} (Extra)</p>
+                                </div>
+                                <div className="font-bold text-gray-700">€{exp.cost}</div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* CSS-based Visual Distribution (Replaces Recharts) */}
+                    <div className="mb-8">
+                        <h4 className="text-sm font-bold text-gray-500 mb-2">Distribución</h4>
+                        <div className="flex h-4 w-full rounded-full overflow-hidden">
+                             {paidActivities.map((act, idx) => {
+                                 const pct = (act.priceEUR / total) * 100;
+                                 return (
+                                     <div key={act.id} style={{ width: `${pct}%`, backgroundColor: COLORS[idx % COLORS.length] }} title={act.title}></div>
+                                 )
+                             })}
+                        </div>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                            {paidActivities.map((act, idx) => (
+                                <div key={act.id} className="flex items-center text-xs text-gray-500">
+                                    <span className="w-2 h-2 rounded-full mr-1" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></span>
+                                    {act.title}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-stone-50 p-4 rounded-lg border border-stone-200">
+                        <h4 className="text-sm font-bold text-stone-700 mb-3">+ Añadir Gasto Extra</h4>
+                        <div className="flex gap-2 mb-2">
+                            <input type="text" placeholder="Concepto" className="flex-1 p-2 border rounded text-sm select-text" value={newExpenseName} onChange={e => setNewExpenseName(e.target.value)} />
+                            <input type="number" placeholder="€" className="w-20 p-2 border rounded text-sm select-text" value={newExpenseCost} onChange={e => setNewExpenseCost(e.target.value)} />
+                        </div>
+                        <button onClick={addExpense} className="w-full bg-stone-200 text-stone-700 font-bold py-2 rounded text-sm hover:bg-stone-300">Añadir</button>
+                    </div>
+
+                    <div className="mt-6 bg-blue-50 border border-blue-100 p-4 rounded-lg">
+                        <h4 className="font-bold text-blue-800 mb-2 flex items-center"><Info size={16} className="mr-2"/> Nota BIRG</h4>
+                        <p className="text-sm text-blue-700">El ticket BIRG de 12€ incluye tren ida/vuelta, metro y buses en Roma. Es la opción más económica.</p>
+                    </div>
+
+                    <SharedFooter />
+                </div>
+            );
+        };
+
+        const Guide = ({ userLocation }) => {
+            const [weather, setWeather] = useState(null);
+            
+            const speak = (text) => {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = 'it-IT';
+                    utterance.rate = 0.8;
+                    window.speechSynthesis.speak(utterance);
+                }
+            };
+
+            useEffect(() => {
+                // Weather for Rome
+                fetch('https://api.open-meteo.com/v1/forecast?latitude=41.9028&longitude=12.4964&current=temperature_2m,weather_code&hourly=temperature_2m,weather_code&daily=sunrise,sunset&timezone=Europe%2FBerlin&forecast_days=1')
+                    .then(res => res.json())
+                    .then(data => {
+                        setWeather(data.current);
+                    });
+            }, []);
+
+            const handleSOS = () => {
+                const lat = userLocation?.lat || 0;
+                const lng = userLocation?.lng || 0;
+                const mapLink = `https://www.google.com/maps?q=${lat},${lng}`;
+                const msg = `🆘 SOS! Necesito ayuda. Mi ubicación actual en Roma es: ${mapLink}`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+            };
+
+            return (
+                <div className="pb-32 px-4 pt-6 max-w-lg mx-auto h-full overflow-y-auto">
+                    <h2 className="text-2xl font-bold text-roma-700 mb-6">Guía y Herramientas</h2>
+
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                         <button onClick={handleSOS} className="bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center animate-pulse">
+                            <AlertTriangle className="mr-2" /> SOS
+                         </button>
+                         <button onClick={() => window.open('https://www.trenitalia.com/', '_blank')} className="bg-green-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center">
+                            <Train className="mr-2" /> Trenitalia
+                         </button>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm mb-6 flex justify-between items-center">
+                        <h3 className="font-bold text-stone-700 flex items-center"><Thermometer className="mr-2" size={18}/> Clima Roma</h3>
+                        {weather && <span className="text-2xl font-bold text-roma-600">{weather.temperature_2m}°C</span>}
+                    </div>
+
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center"><Languages className="mr-2"/> Italiano Exprés</h3>
+                    <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden mb-6">
+                        {ITALIAN_WORDS.map((item, idx) => (
+                        <div key={item.word} className={`p-4 flex justify-between items-center ${idx !== ITALIAN_WORDS.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                            <div>
+                                <div className="flex items-baseline space-x-2">
+                                    <span className="font-bold text-lg text-roma-700">{item.word}</span>
+                                    <span className="text-xs text-gray-400 font-mono">{item.phonetic}</span>
+                                </div>
+                                <div className="text-sm font-medium text-gray-700 mt-1">"{item.simplified}"</div>
+                                <p className="text-xs text-gray-500 mt-0.5 italic">{item.meaning}</p>
+                            </div>
+                            <button onClick={() => speak(item.word)} className="p-3 rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200">
+                                <Volume2 size={20} />
+                            </button>
+                        </div>
+                        ))}
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <h3 className="font-bold text-yellow-800 mb-2 flex items-center"><AlertTriangle size={18} className="mr-2"/> Consejos de Oro</h3>
+                        <ul className="text-sm text-yellow-900 space-y-2 list-disc pl-4">
+                            <li><strong>Ticket BIRG:</strong> Cómpralo en el "Tabacchi" de la estación o máquinas autoservicio. Escribe tu nombre y fecha en el reverso y VALÍDALO en la máquina verde antes de subir al tren.</li>
+                            <li><strong>Fontana di Trevi:</strong> Multa si comes o te sientas en el borde. Flujo controlado.</li>
+                            <li><strong>Agua Gratis:</strong> Usa las fuentes "Nasoni" para rellenar tu botella. El agua es potable y fría.</li>
+                            <li><strong>WC:</strong> Lleva monedas de 50c o 1€ para baños públicos.</li>
+                        </ul>
+                    </div>
+
+                    <SharedFooter />
+                </div>
+            );
+        };
+
+        const MapComponent = ({ activities, userLocation, focusedLocation }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+
+            useEffect(() => {
+                if(!mapRef.current) return;
+                
+                if(!mapInstance.current) {
+                    mapInstance.current = L.map(mapRef.current, { zoomControl: false }).setView([41.9028, 12.4964], 12); // Rome View
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; OpenStreetMap &copy; CARTO',
+                        maxZoom: 19
+                    }).addTo(mapInstance.current);
+                }
+                const map = mapInstance.current;
+
+                const pinIcon = L.divIcon({
+                    className: 'custom-pin',
+                    html: '<div style="background-color:#b91c1c;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [12, 12]
+                });
+
+                map.eachLayer((layer) => {
+                    if(layer instanceof L.Marker || layer instanceof L.Polyline) map.removeLayer(layer);
+                });
+
+                activities.forEach(act => {
+                    L.marker([act.coords.lat, act.coords.lng], { icon: pinIcon }).addTo(map).bindPopup(act.title);
+                    if(act.endCoords) {
+                         L.marker([act.endCoords.lat, act.endCoords.lng], { icon: pinIcon }).addTo(map);
+                         L.polyline([[act.coords.lat, act.coords.lng], [act.endCoords.lat, act.endCoords.lng]], {
+                             color: '#b91c1c', weight: 3, dashArray: '5, 10'
+                         }).addTo(map);
+                    }
+                });
+
+                if(userLocation) {
+                    const userIcon = L.divIcon({
+                        className: 'user-pin',
+                        html: '<div style="background-color:#3A7D44;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);"></div>',
+                        iconSize: [16, 16]
+                    });
+                    L.marker([userLocation.lat, userLocation.lng], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+                }
+
+                if(focusedLocation) {
+                    map.flyTo([focusedLocation.lat, focusedLocation.lng], 16);
+                }
+
+            }, [activities, userLocation, focusedLocation]);
+
+            return <div ref={mapRef} className="w-full h-full z-0" />;
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('timeline');
+            const [itinerary, setItinerary] = useState(INITIAL_ITINERARY);
+            const [userLocation, setUserLocation] = useState(null);
+            const [mapFocus, setMapFocus] = useState(null);
+            const [countdown, setCountdown] = useState('');
+
+            useEffect(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if(saved) {
+                    const parsed = JSON.parse(saved);
+                    const merged = INITIAL_ITINERARY.map(init => {
+                        const s = parsed.find(p => p.id === init.id);
+                        return s ? { ...init, completed: s.completed } : init;
+                    });
+                    setItinerary(merged);
+                } else {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_ITINERARY));
+                }
+            }, []);
+
+            useEffect(() => {
+                if('geolocation' in navigator) {
+                    navigator.geolocation.watchPosition(
+                        (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                        null, { enableHighAccuracy: true }
+                    );
+                }
+            }, []);
+
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    const now = new Date();
+                    const [h, m] = SHIP_ONBOARD_TIME.split(':').map(Number);
+                    const target = new Date();
+                    target.setHours(h, m, 0);
+                    
+                    const diff = target - now;
+                    if(diff < 0) setCountdown("¡A BORDO!");
+                    else {
+                        const hh = Math.floor(diff / 3600000);
+                        const mm = Math.floor((diff % 3600000) / 60000);
+                        const ss = Math.floor((diff % 60000) / 1000);
+                        setCountdown(`${hh}h ${mm}m ${ss}s`);
+                    }
+                }, 1000);
+                return () => clearInterval(interval);
+            }, []);
+
+            const toggleComplete = (id) => {
+                const next = itinerary.map(a => a.id === id ? { ...a, completed: !a.completed } : a);
+                setItinerary(next);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            };
+
+            const handleLocate = (coords, endCoords) => {
+                setMapFocus(coords);
+                setActiveTab('map');
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-stone-50 font-sans">
+                    <header className="bg-roma-800 text-white p-3 shadow-md z-20 flex justify-between items-center shrink-0">
+                        <div className="flex items-center">
+                            <Anchor className="mr-2 text-gold-500" size={20} />
+                            <div>
+                                <h1 className="font-bold text-sm leading-none text-gold-500 uppercase tracking-wider">Todos a Bordo: {SHIP_ONBOARD_TIME}</h1>
+                                <p className="text-[10px] text-roma-200">Salida: {SHIP_DEPARTURE_TIME}</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-xl font-mono font-bold text-white tabular-nums">{countdown}</div>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 overflow-hidden relative">
+                        {activeTab === 'timeline' && <Timeline itinerary={itinerary} onToggleComplete={toggleComplete} onLocate={handleLocate} userLocation={userLocation} />}
+                        {activeTab === 'map' && <MapComponent activities={itinerary} userLocation={userLocation} focusedLocation={mapFocus} />}
+                        {activeTab === 'budget' && <Budget itinerary={itinerary} />}
+                        {activeTab === 'guide' && <Guide userLocation={userLocation} />}
+                    </main>
+
+                    <nav className="bg-white border-t border-stone-200 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-30 pb-safe shrink-0">
+                        <div className="flex justify-around items-center h-16">
+                            {[
+                                { id: 'timeline', icon: CalendarClock, label: 'Itinerario' },
+                                { id: 'map', icon: MapIcon, label: 'Mapa' },
+                                { id: 'budget', icon: Wallet, label: 'Gastos' },
+                                { id: 'guide', icon: BookOpen, label: 'Guía' }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex flex-col items-center w-full h-full justify-center transition-colors ${activeTab === tab.id ? 'text-roma-700' : 'text-stone-400'}`}
+                                >
+                                    <tab.icon size={24} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
+                                    <span className="text-[10px] mt-1 font-medium">{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
